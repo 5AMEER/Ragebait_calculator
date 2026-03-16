@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #1a1a1e; min-height: 100vh; display: flex;
+    align-items: center; justify-content: center;
+    font-family: 'DM Sans', sans-serif; padding: 24px;
+  }
+
+  .calc-wrapper { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+  .calc-label {
+    font-size: 10px; letter-spacing: 0.18em; color: #333;
+    text-transform: uppercase; font-family: 'DM Mono', monospace; font-weight: 300;
+    transition: opacity 0.4s;
+  }
+
+  .calculator {
+    background: #111113; border-radius: 24px; padding: 20px; width: 320px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 32px 64px rgba(0,0,0,0.6),
+      0 8px 16px rgba(0,0,0,0.4);
+    position: relative; overflow: visible;
+    transform-origin: center bottom;
+    transition: box-shadow 0.3s;
+  }
+
+  .calculator::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+    border-radius: 24px 24px 0 0;
+  }
+
+  .display {
+    background: #0a0a0b; border-radius: 14px; padding: 16px 20px 12px;
+    margin-bottom: 16px; min-height: 96px; display: flex; flex-direction: column;
+    justify-content: flex-end; align-items: flex-end;
+    border: 1px solid rgba(255,255,255,0.05);
+    position: relative; overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .display-expression {
+    font-family: 'DM Mono', monospace; font-size: 13px; color: #555;
+    font-weight: 300; min-height: 18px; margin-bottom: 6px; letter-spacing: 0.04em;
+    transition: opacity 0.2s;
+  }
+
+  .display-value {
+    font-family: 'DM Mono', monospace; font-size: 40px; font-weight: 300;
+    color: #f0f0f0; letter-spacing: -0.02em; line-height: 1;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transform-origin: right center;
+    transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), color 0.2s;
+  }
+  .display-value.small { font-size: 22px; }
+  .display-value.tiny  { font-size: 15px; }
+
+  @keyframes resultPop {
+    0%   { transform: scale(0.88); opacity: 0.4; }
+    60%  { transform: scale(1.06); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
+  }
+  .display-value.popping { animation: resultPop 0.28s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+  .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; position: relative; }
+
+  .btn {
+    border: none; border-radius: 12px; height: 64px;
+    font-family: 'DM Sans', sans-serif; font-size: 18px; font-weight: 400;
+    cursor: pointer;
+    position: relative; overflow: hidden; outline: none;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+    transform: scale(1);
+    transition: transform 0.1s cubic-bezier(0.34,1.56,0.64,1),
+                background 0.15s, color 0.15s, box-shadow 0.15s;
+    will-change: transform;
+  }
+
+  .btn:hover  { transform: scale(1.04); }
+  .btn:active { transform: scale(0.91) !important;
+                transition: transform 0.07s ease !important; }
+
+  .btn-num {
+    background: #1e1e22; color: #e8e8e8;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .btn-num:hover { background: #26262c; box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08); }
+
+  .btn-fn {
+    background: #2a2a30; color: #aaa; font-size: 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .btn-fn:hover { background: #33333b; }
+
+  .btn-op {
+    background: #e8622a; color: #fff; font-size: 22px; font-weight: 300;
+    box-shadow: 0 2px 8px rgba(232,98,42,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-op:hover { background: #f0692f; box-shadow: 0 4px 16px rgba(232,98,42,0.55); }
+  .btn-op.active { background: #fff; color: #e8622a; box-shadow: 0 4px 16px rgba(255,255,255,0.15); }
+
+  .btn-eq {
+    background: #e8622a; color: #fff; font-size: 22px; font-weight: 300;
+    box-shadow: 0 2px 8px rgba(232,98,42,0.4), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-eq:hover { background: #f0692f; box-shadow: 0 4px 20px rgba(232,98,42,0.6); }
+
+  .btn-zero { grid-column: span 2; text-align: left; padding-left: 24px; }
+
+  .ripple {
+    position: absolute; border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    transform: scale(0); pointer-events: none;
+    animation: rippleAnim 0.45s ease-out forwards;
+  }
+  @keyframes rippleAnim {
+    to { transform: scale(4); opacity: 0; }
+  }
+
+  #toast {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(80px) scale(0.92);
+    background: #1e1e22; border: 1px solid rgba(255,255,255,0.1);
+    color: #f0f0f0; border-radius: 14px; padding: 12px 20px;
+    font-size: 14px; max-width: 300px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    transition: transform 0.4s cubic-bezier(0.34,1.4,0.64,1), opacity 0.4s;
+    opacity: 0; z-index: 999; pointer-events: none;
+  }
+  #toast.show {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  #fake-loader {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #e8622a, #f5a623);
+    width: 0%; border-radius: 2px; z-index: 10; opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  #fire-overlay {
+    position: absolute; inset: 0; border-radius: 24px;
+    pointer-events: none; z-index: 5; opacity: 0;
+    transition: opacity 0.4s ease;
+    background: linear-gradient(to top, rgba(232,98,42,0.4) 0%, rgba(232,98,42,0.1) 50%, transparent 80%);
+  }
+  .on-fire #fire-overlay { opacity: 1; }
+  .on-fire { box-shadow: 0 0 0 1px rgba(232,98,42,0.4), 0 0 40px rgba(232,98,42,0.25), 0 32px 64px rgba(0,0,0,0.6) !important; }
+  .on-fire .display { border-color: rgba(232,98,42,0.3) !important; }
+
+  @keyframes shake {
+    0%  { transform: translate(0,0) rotate(0deg); }
+    10% { transform: translate(-7px,-2px) rotate(-1.5deg); }
+    20% { transform: translate(7px,2px) rotate(1.5deg); }
+    30% { transform: translate(-6px,1px) rotate(-1deg); }
+    40% { transform: translate(6px,-1px) rotate(1deg); }
+    50% { transform: translate(-4px,2px) rotate(-0.8deg); }
+    60% { transform: translate(4px,-2px) rotate(0.8deg); }
+    70% { transform: translate(-2px,1px) rotate(-0.4deg); }
+    80% { transform: translate(2px,-1px) rotate(0.4deg); }
+    90% { transform: translate(-1px,0); }
+    100%{ transform: translate(0,0) rotate(0deg); }
+  }
+  .shaking { animation: shake 0.55s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
+  @keyframes collapse {
+    0%   { transform: scaleY(1) scaleX(1); opacity: 1; }
+    25%  { transform: scaleY(0.04) scaleX(1.08); opacity: 0.7; }
+    55%  { transform: scaleY(0.04) scaleX(1.08); opacity: 0.7; }
+    75%  { transform: scaleY(1.06) scaleX(0.97); opacity: 1; }
+    88%  { transform: scaleY(0.97) scaleX(1.01); }
+    100% { transform: scaleY(1) scaleX(1); opacity: 1; }
+  }
+  .collapsing { animation: collapse 0.9s cubic-bezier(0.36,0.07,0.19,0.97) both; }
+
+  @keyframes glitch {
+    0%  { transform: translate(0,0); filter: none; }
+    10% { transform: translate(-4px,2px); filter: hue-rotate(90deg); }
+    20% { transform: translate(4px,-2px); filter: hue-rotate(180deg); }
+    30% { transform: translate(-3px,-3px); filter: hue-rotate(270deg); }
+    40% { transform: translate(3px,3px); filter: saturate(3); }
+    50% { transform: translate(-2px,2px); filter: hue-rotate(90deg); }
+    60% { transform: translate(2px,-2px); filter: none; }
+    70% { transform: translate(-4px,0); filter: hue-rotate(180deg); }
+    80% { transform: translate(4px,0); filter: saturate(2); }
+    90% { transform: translate(-1px,1px); filter: none; }
+    100%{ transform: translate(0,0); filter: none; }
+  }
+  .glitching { animation: glitch 0.45s steps(1) infinite; }
+
+  .btn.shuffling {
+    transition: left 0.5s cubic-bezier(0.34,1.4,0.64,1),
+                top  0.5s cubic-bezier(0.34,1.4,0.64,1) !important;
+  }
+
+  #crash-screen {
+    position: absolute; inset: 0; background: #0055ff;
+    border-radius: 24px; z-index: 100; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    color: #fff; font-family: 'DM Mono', monospace; padding: 24px; text-align: center;
+    opacity: 0; transform: scale(0.95);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #crash-screen.show { display: flex; }
+  #crash-screen.visible { opacity: 1; transform: scale(1); }
+  #crash-screen .crash-icon { font-size: 44px; margin-bottom: 14px; }
+  #crash-screen h2 { font-size: 18px; font-weight: 500; margin-bottom: 8px; letter-spacing: -0.01em; }
+  #crash-screen p { font-size: 11px; opacity: 0.75; line-height: 1.7; }
+  #crash-screen .crash-progress { margin-top: 20px; width: 100%; background: rgba(255,255,255,0.2); border-radius: 4px; height: 5px; overflow: hidden; }
+  #crash-screen .crash-bar { height: 100%; background: #fff; width: 0%; border-radius: 4px; transition: width 0.08s linear; }
+
+  @keyframes rainbow {
+    0%  { color: #ff6b6b; }
+    20% { color: #ffd93d; }
+    40% { color: #6bcb77; }
+    60% { color: #4d96ff; }
+    80% { color: #c77dff; }
+    100%{ color: #ff6b6b; }
+  }
+  .rainbow-text { animation: rainbow 0.55s linear infinite; }
+
+  @keyframes displayFlash {
+    0%,100% { background: #0a0a0b; }
+    40%     { background: #1a0f08; }
+  }
+  .display.flashing { animation: displayFlash 0.35s ease; }
+
+  @keyframes bounceIn {
+    0%   { transform: scale(0.85) translateY(20px); opacity: 0; }
+    60%  { transform: scale(1.03) translateY(-4px); opacity: 1; }
+    80%  { transform: scale(0.98) translateY(2px); }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .calculator { animation: bounceIn 0.55s cubic-bezier(0.34,1.3,0.64,1) both; }
+</style>
+</head>
+<body>
+<div class="calc-wrapper">
+  <div class="calculator" id="calc">
+    <div id="fire-overlay"></div>
+    <div id="crash-screen">
+      <div class="crash-icon">:(</div>
+      <h2>Your calculator ran into a problem</h2>
+      <p>It needs to restart. We're just collecting some error info, and then we'll restart for you.</p>
+      <p style="margin-top:8px;font-size:13px;" id="crash-pct">0% complete</p>
+      <div class="crash-progress"><div class="crash-bar" id="crash-bar"></div></div>
+    </div>
+    <div id="fake-loader"></div>
+    <div class="display" id="display">
+      <div class="display-expression" id="expr"></div>
+      <div class="display-value" id="val">0</div>
+    </div>
+    <div class="buttons" id="btn-grid">
+      <button class="btn btn-fn"  data-action="clear">AC</button>
+      <button class="btn btn-fn"  data-action="negate">+/−</button>
+      <button class="btn btn-fn"  data-action="percent">%</button>
+      <button class="btn btn-op"  data-action="op" data-op="÷">÷</button>
+      <button class="btn btn-num" data-action="digit" data-digit="7">7</button>
+      <button class="btn btn-num" data-action="digit" data-digit="8">8</button>
+      <button class="btn btn-num" data-action="digit" data-digit="9">9</button>
+      <button class="btn btn-op"  data-action="op" data-op="×">×</button>
+      <button class="btn btn-num" data-action="digit" data-digit="4">4</button>
+      <button class="btn btn-num" data-action="digit" data-digit="5">5</button>
+      <button class="btn btn-num" data-action="digit" data-digit="6">6</button>
+      <button class="btn btn-op"  data-action="op" data-op="−">−</button>
+      <button class="btn btn-num" data-action="digit" data-digit="1">1</button>
+      <button class="btn btn-num" data-action="digit" data-digit="2">2</button>
+      <button class="btn btn-num" data-action="digit" data-digit="3">3</button>
+      <button class="btn btn-op"  data-action="op" data-op="+">+</button>
+      <button class="btn btn-num btn-zero" data-action="digit" data-digit="0">0</button>
+      <button class="btn btn-num" data-action="decimal">.</button>
+      <button class="btn btn-eq"  data-action="equals">=</button>
+    </div>
+  </div>
+  <div class="calc-label">totally normal calculator</div>
+</div>
+<div id="toast"></div>
+
+<script>
+  // ── CALCULATOR STATE ──
+  let current = '0', expression = '', operator = null, prevVal = null, waitingForOperand = false;
+  const valEl     = document.getElementById('val');
+  const exprEl    = document.getElementById('expr');
+  const displayEl = document.getElementById('display');
+
+  function updateDisplay() {
+    valEl.textContent = current;
+    valEl.className = 'display-value';
+    if (current.length > 12) valEl.classList.add('tiny');
+    else if (current.length > 8) valEl.classList.add('small');
+    exprEl.textContent = expression;
+  }
+  function popDisplay() {
+    valEl.classList.remove('popping');
+    void valEl.offsetWidth;
+    valEl.classList.add('popping');
+  }
+  function flashDisplay() {
+    displayEl.classList.remove('flashing');
+    void displayEl.offsetWidth;
+    displayEl.classList.add('flashing');
+  }
+
+  function handleDigit(d) {
+    if (waitingForOperand) { current = d; waitingForOperand = false; }
+    else current = current === '0' ? d : current + d;
+    updateDisplay();
+  }
+  function handleOp(op) {
+    if (operator && waitingForOperand) {
+      operator = op; expression = prevVal + ' ' + op;
+      highlightOp(op); updateDisplay(); return;
+    }
+    if (operator && !waitingForOperand) compute(false);
+    prevVal = parseFloat(current); operator = op;
+    expression = current + ' ' + op; waitingForOperand = true;
+    highlightOp(op); updateDisplay();
+  }
+  function compute(finalize) {
+    if (!operator || prevVal === null) return;
+    const cur = parseFloat(current);
+    let result;
+    switch(operator) {
+      case '+': result = prevVal + cur; break;
+      case '−': result = prevVal - cur; break;
+      case '×': result = prevVal * cur; break;
+      case '÷': result = cur === 0 ? 'Error' : prevVal / cur; break;
+    }
+    current = result === 'Error' ? 'Error' : String(parseFloat(result.toFixed(10)));
+    if (finalize) {
+      expression = ''; operator = null; prevVal = null;
+      waitingForOperand = true; highlightOp(null);
+    }
+  }
+  function handleClear() {
+    current = '0'; expression = ''; operator = null; prevVal = null; waitingForOperand = false;
+    highlightOp(null); updateDisplay();
+  }
+  function handleNegate() {
+    if (current !== '0' && current !== 'Error') {
+      current = current.startsWith('-') ? current.slice(1) : '-' + current;
+      updateDisplay();
+    }
+  }
+  function handlePercent() { current = String(parseFloat(current)/100); updateDisplay(); }
+  function handleDecimal() {
+    if (waitingForOperand) { current = '0.'; waitingForOperand = false; }
+    else if (!current.includes('.')) current += '.';
+    updateDisplay();
+  }
+  function highlightOp(op) {
+    document.querySelectorAll('.btn-op').forEach(b => b.classList.toggle('active', b.dataset.op === op));
+  }
+
+  // ── RIPPLE ──
+  function spawnRipple(btn, e) {
+    const r    = btn.getBoundingClientRect();
+    const size = Math.max(r.width, r.height);
+    const x    = (e.clientX ?? r.left + r.width/2) - r.left - size/2;
+    const y    = (e.clientY ?? r.top  + r.height/2) - r.top  - size/2;
+    const rip  = document.createElement('span');
+    rip.className = 'ripple';
+    rip.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px`;
+    btn.appendChild(rip);
+    rip.addEventListener('animationend', () => rip.remove());
+  }
+
+  // ── CONTENT POOLS ──
+  const wrongAnswerPool = [
+    'potato','yes','no','idk lol','maybe?','ask your mom',
+    'Error 404','NaN (nice and not)','∞','tuesday',
+    'have you tried turning it off?','bruh','copium',
+    'skill issue','ratio','ur mom','touch grass',
+    '99 problems','over 9000','π (close enough)',
+    'undefined behavior','please go outside','not today',
+    'vibes','absolutely not','your loss','L + ratio',
+  ];
+  const roastPool = [
+    'bro really pulled out a calculator for this 💀',
+    "this ain't it chief",
+    'imagine needing a calculator and STILL being wrong',
+    'my guy really thought he was cooking',
+    "that's crazy. anyway.",
+    'ok but why though',
+    'the audacity. the AUDACITY.',
+    'rent free in your head: basic arithmetic',
+    "sir this is a Wendy's",
+    'you were so close. you were not close.',
+    'new phone who dis',
+    'not the math crime I expected today',
+    'bro discovered numbers 💀',
+    "that's wild, but also skill issue",
+  ];
+  const fakeLoaderPool = [
+    'Calculating...','Consulting the math gods...',
+    'Running quantum computation...','Dividing by zero safely...',
+    'Asking ChatGPT...','Phoning a friend...','Checking Wikipedia...',
+  ];
+
+  // ── DECK SYSTEM ──
+  function shuffled(arr) {
+    const a = [...arr];
+    for (let i = a.length-1; i > 0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+  const decks = {
+    wrongAnswers: shuffled(wrongAnswerPool),
+    roasts:       shuffled(roastPool),
+    fakeLoaders:  shuffled(fakeLoaderPool),
+  };
+  function draw(key, pool) {
+    if (!decks[key].length) decks[key] = shuffled(pool);
+    return decks[key].pop();
+  }
+
+  const MODULE_NAMES = [
+    'wrongAnswer','wrongAnswer','wrongAnswer',
+    'keyShake','keyShake',
+    'fakeLoader','fakeLoader',
+    'keyShuffle',
+    'onFire',
+    'collapse',
+    'glitch',
+    'fakeCrash',
+  ];
+  let moduleDeck = shuffled(MODULE_NAMES);
+  function drawModule() {
+    if (!moduleDeck.length) moduleDeck = shuffled(MODULE_NAMES);
+    return moduleDeck.pop();
+  }
+
+  // ── TOAST ──
+  function showToast(msg, duration = 2800) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), duration);
+  }
+
+  // ── CHAOS MODULES ──
+  function moduleWrongAnswer() {
+    flashDisplay();
+    current = draw('wrongAnswers', wrongAnswerPool);
+    updateDisplay(); popDisplay();
+    if (Math.random() < 0.6) showToast(draw('roasts', roastPool));
+  }
+
+  function moduleFakeLoader() {
+    const label = draw('fakeLoaders', fakeLoaderPool);
+    showToast(label, 3200);
+    const loader = document.getElementById('fake-loader');
+    loader.style.opacity = '1'; loader.style.transition = 'none'; loader.style.width = '0%';
+    let pct = 0;
+    const iv = setInterval(() => {
+      pct += Math.random() * (pct < 70 ? 12 : 2);
+      if (pct >= 97) pct = 97;
+      loader.style.width = pct + '%';
+    }, 120);
+    setTimeout(() => {
+      clearInterval(iv); loader.style.width = '100%';
+      setTimeout(() => {
+        loader.style.opacity = '0'; loader.style.width = '0%';
+        flashDisplay();
+        current = draw('wrongAnswers', wrongAnswerPool);
+        updateDisplay(); popDisplay();
+      }, 300);
+    }, 2400 + Math.random()*800);
+  }
+
+  function moduleKeyShake() {
+    const calc = document.getElementById('calc');
+    calc.classList.add('shaking');
+    calc.addEventListener('animationend', () => calc.classList.remove('shaking'), { once: true });
+    showToast('something went wrong. probably your fault.');
+    flashDisplay();
+    current = draw('wrongAnswers', wrongAnswerPool);
+    updateDisplay(); popDisplay();
+  }
+
+  function moduleKeyShuffle() {
+    const grid = document.getElementById('btn-grid');
+    const btns = Array.from(grid.querySelectorAll('.btn'));
+    const gr   = grid.getBoundingClientRect();
+    const positions = btns.map(b => {
+      const r = b.getBoundingClientRect();
+      return { left: r.left - gr.left, top: r.top - gr.top, w: r.width, h: r.height };
+    });
+    grid.style.position = 'relative';
+    grid.style.height = gr.height + 'px';
+    btns.forEach((b, i) => {
+      b.style.position = 'absolute';
+      b.style.width    = positions[i].w + 'px';
+      b.style.height   = positions[i].h + 'px';
+      b.style.left     = positions[i].left + 'px';
+      b.style.top      = positions[i].top + 'px';
+      b.style.margin   = '0';
+      b.style.transition = 'none';
+    });
+    const sp = shuffled(positions);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      btns.forEach((b, i) => {
+        b.classList.add('shuffling');
+        b.style.left = sp[i].left + 'px';
+        b.style.top  = sp[i].top + 'px';
+      });
+    }));
+    showToast('🔀 keys go brrr');
+    flashDisplay();
+    current = draw('wrongAnswers', wrongAnswerPool);
+    updateDisplay(); popDisplay();
+    setTimeout(() => {
+      btns.forEach((b, i) => { b.style.left = positions[i].left + 'px'; b.style.top = positions[i].top + 'px'; });
+      setTimeout(() => {
+        btns.forEach(b => {
+          b.classList.remove('shuffling');
+          b.style.position = b.style.width = b.style.height = b.style.left = b.style.top = b.style.margin = b.style.transition = '';
+        });
+        grid.style.position = grid.style.height = '';
+      }, 520);
+    }, 2600);
+  }
+
+  function moduleOnFire() {
+    const calc = document.getElementById('calc');
+    calc.classList.add('on-fire','shaking');
+    showToast('🔥 YOUR CALCULATOR IS ON FIRE 🔥');
+    flashDisplay();
+    current = draw('wrongAnswers', wrongAnswerPool);
+    updateDisplay(); popDisplay();
+    setTimeout(() => calc.classList.remove('on-fire','shaking'), 2800);
+  }
+
+  function moduleFakeCrash() {
+    const screen = document.getElementById('crash-screen');
+    const bar    = document.getElementById('crash-bar');
+    const pctEl  = document.getElementById('crash-pct');
+    screen.classList.add('show');
+    requestAnimationFrame(() => requestAnimationFrame(() => screen.classList.add('visible')));
+    let pct = 0;
+    const iv = setInterval(() => {
+      pct += Math.random() * 3.5;
+      if (pct >= 100) { pct = 100; clearInterval(iv); }
+      bar.style.width = pct + '%';
+      pctEl.textContent = Math.floor(pct) + '% complete';
+    }, 80);
+    setTimeout(() => {
+      screen.classList.remove('visible');
+      setTimeout(() => {
+        screen.classList.remove('show');
+        bar.style.width = '0%';
+        current = 'rebooting...'; updateDisplay();
+        setTimeout(() => { current = '0'; updateDisplay(); }, 1400);
+      }, 260);
+    }, 4200);
+  }
+
+  function moduleGlitch() {
+    const calc = document.getElementById('calc');
+    calc.classList.add('glitching');
+    flashDisplay();
+    current = 'E\u0334R\u0337R\u0338O\u0335R\u0336'; updateDisplay();
+    setTimeout(() => {
+      calc.classList.remove('glitching');
+      current = 'ERROR'; updateDisplay(); popDisplay();
+    }, 1300);
+    showToast('the matrix is broken');
+  }
+
+  function moduleCollapse() {
+    const calc = document.getElementById('calc');
+    calc.classList.add('collapsing');
+    calc.addEventListener('animationend', () => calc.classList.remove('collapsing'), { once: true });
+    current = 'lol nope'; updateDisplay(); popDisplay();
+    showToast('calculator said no ✋');
+  }
+
+  // ── SPECIAL NUMBERS ──
+  function checkSpecialNumber(n) {
+    const s = String(n).replace('.','').replace('-','');
+    if (s==='80085') return { display:'80085 😏', toast:'👀 nice number bro' };
+    if (s==='69420') return { display:'69420 💀', toast:'certified classic' };
+    if (s==='67')    return { display:'67 🍆',    toast:'ayo??' };
+    if (s==='42')    return { display:'The Answer.', toast:'to life, the universe, and everything' };
+    if (s==='666')   return { display:'😈 666 😈', toast:'oh no.' };
+    if (s==='1337')  return { display:'l33t hax0r', toast:'u r 1337' };
+    return null;
+  }
+  function fireSpecialNumber(sp) {
+    flashDisplay();
+    current = sp.display; updateDisplay(); popDisplay();
+    valEl.classList.add('rainbow-text');
+    showToast(sp.toast, 3200);
+    setTimeout(() => valEl.classList.remove('rainbow-text'), 3200);
+  }
+
+  const moduleMap = {
+    wrongAnswer: moduleWrongAnswer, keyShake: moduleKeyShake,
+    fakeLoader:  moduleFakeLoader,  keyShuffle: moduleKeyShuffle,
+    onFire:      moduleOnFire,      collapse: moduleCollapse,
+    glitch:      moduleGlitch,      fakeCrash: moduleFakeCrash,
+  };
+
+  // ── RAGEBAIT ENGINE ──
+  function fireRagebait(realResult) {
+    const sp = checkSpecialNumber(realResult);
+    if (sp) { fireSpecialNumber(sp); return; }
+    moduleMap[drawModule()]();
+  }
+
+  function handleEquals() {
+    if (!operator || prevVal === null) return;
+    compute(true);
+    const realResult = current;
+    waitingForOperand = true;
+    fireRagebait(realResult);
+  }
+
+  // ── EVENTS ──
+  document.getElementById('btn-grid').addEventListener('click', e => {
+    const btn = e.target.closest('.btn');
+    if (!btn) return;
+    spawnRipple(btn, e);
+    const a = btn.dataset.action;
+    if      (a==='digit')   handleDigit(btn.dataset.digit);
+    else if (a==='op')      handleOp(btn.dataset.op);
+    else if (a==='equals')  handleEquals();
+    else if (a==='clear')   handleClear();
+    else if (a==='negate')  handleNegate();
+    else if (a==='percent') handlePercent();
+    else if (a==='decimal') handleDecimal();
+  });
+
+  document.addEventListener('keydown', e => {
+    if ('0123456789'.includes(e.key)) handleDigit(e.key);
+    else if (e.key==='+')       handleOp('+');
+    else if (e.key==='-')       handleOp('−');
+    else if (e.key==='*')       handleOp('×');
+    else if (e.key==='/') { e.preventDefault(); handleOp('÷'); }
+    else if (e.key==='Enter'||e.key==='=') handleEquals();
+    else if (e.key==='Escape') handleClear();
+    else if (e.key==='.') handleDecimal();
+    else if (e.key==='Backspace') {
+      if (current.length > 1) current = current.slice(0,-1);
+      else current = '0';
+      updateDisplay();
+    }
+  });
+</script>
+</body>
+</html>
